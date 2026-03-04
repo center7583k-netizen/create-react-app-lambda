@@ -1,0 +1,441 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { 
+  User, GraduationCap, Calendar, Award, 
+  Image as ImageIcon, Lock, ChevronLeft, ChevronRight, 
+  Save, Edit3, Sparkles, List, X, Mail, Phone, 
+  MapPin, Cake, CheckCircle2, Upload, BookOpen, 
+  Target, Zap, Star, Heart, FileText, Medal
+} from 'lucide-react';
+
+// --- Firebase Configuration ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+  const fileInputRef = useRef(null);
+  const [activeImageEdit, setActiveImageEdit] = useState(null);
+  
+  // ข้อมูล Portfolio 10 หน้า
+  const [portfolioData, setPortfolioData] = useState({
+    profile: {
+      nameTh: 'นายวรพล บุเงิน',
+      nickname: 'วรพล',
+      school: 'โรงเรียนนารีนุกูล',
+      coverUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=1000&auto=format&fit=crop",
+      phone: '08X-XXX-XXXX',
+      email: 'worapol@example.com',
+      address: 'อุบลราชธานี',
+      birthday: '12 กันยายน 2552',
+      motto: "ความพยายามไม่เคยทรยศใคร",
+      skills: "Mathematics, Programming, Public Speaking"
+    },
+    preface: {
+      content: "แฟ้มสะสมผลงานฉบับนี้จัดทำขึ้นเพื่อนำเสนอตัวตนและทักษะของข้าพเจ้า ตลอดจนพัฒนาการและการเรียนรู้ในระดับชั้นมัธยมศึกษา ข้าพเจ้าหวังเป็นอย่างยิ่งว่าท่านคณะกรรมการจะเห็นถึงความตั้งใจและความมุ่งมั่นของข้าพเจ้า..."
+    },
+    contents: [
+      { page: 1, title: 'หน้าปก (Cover)' },
+      { page: 2, title: 'คำนำ (Preface)' },
+      { page: 3, title: 'สารบัญ (Contents)' },
+      { page: 4, title: 'ประวัติส่วนตัว (Profile)' },
+      { page: 5, title: 'ประวัติการศึกษา (Education)' },
+      { page: 6, title: 'กิจกรรม (Activities)' },
+      { page: 8, title: 'เกียรติบัตร (Certificates)' },
+    ],
+    education: {
+      summary: "นายวรพล บุเงิน สำเร็จการศึกษาระดับมัธยมศึกษาตอนปลาย สายการเรียนวิทยาศาสตร์–คณิตศาสตร์ จากโรงเรียนนารีนุกูล โดยมีผลการเรียนเฉลี่ยสะสม (GPAX) 3.89 ซึ่งสะท้อนถึงความมุ่งมั่น ความรับผิดชอบ และความสามารถทางวิชาการในระดับดีเยี่ยมอย่างต่อเนื่องตลอดระยะเวลาการศึกษา",
+      details: "ในด้านความสามารถทางวิชาการ นายวรพลมีความโดดเด่นทั้งในกลุ่มสาระภาษาไทยและคณิตศาสตร์ โดยได้รับรางวัลในการแข่งขันการใช้ภาษาไทย ซึ่งเป็นรางวัลเพื่อพระราชทานสมเด็จพระกนิษฐาธิราชเจ้า กรมสมเด็จพระเทพรัตนราชสุดาฯ สยามบรมราชกุมารี แสดงให้เห็นถึงศักยภาพด้านทักษะภาษา การคิดวิเคราะห์ และการสื่อสารอย่างถูกต้องเหมาะสม\n\nนอกจากนี้ ยังได้รับรางวัลชนะเลิศการแข่งขันต่อสมการคณิตศาสตร์ ซึ่งเป็นกิจกรรมที่ต้องอาศัยความแม่นยำทางการคำนวณ ไหวพริบทางปัญญา และความสามารถในการแก้ปัญหาอย่างเป็นระบบ สะท้อนถึงพื้นฐานทางคณิตศาสตร์ที่แข็งแรงและศักยภาพทางวิทยาศาสตร์–คณิตศาสตร์อย่างชัดเจน",
+      closing: "ตลอดระยะเวลาการศึกษา ได้เข้าร่วมกิจกรรมทางวิชาการและกิจกรรมพัฒนาผู้เรียนอย่างสม่ำเสมอ มีความประพฤติดี มีวินัย ใฝ่เรียนรู้ และสามารถทำงานร่วมกับผู้อื่นได้อย่างมีประสิทธิภาพ คุณลักษณะดังกล่าวส่งผลให้เป็นผู้เรียนที่ได้รับความไว้วางใจจากครูผู้สอนและเป็นแบบอย่างที่ดีแก่เพื่อนนักเรียน ด้วยผลการเรียนที่โดดเด่น ประสบการณ์การแข่งขันทางวิชาการ และความพร้อมทั้งด้านความรู้ ความสามารถ และคุณธรรม จึงมีความพร้อมอย่างยิ่งสำหรับการศึกษาต่อในระดับอุดมศึกษา",
+      history: [
+        { level: "ประถมศึกษา", school: "โรงเรียนอนุบาลอุบลราชธานี", year: "2558-2563" },
+        { level: "มัธยมศึกษาตอนต้น", school: "โรงเรียนนารีนุกูล", year: "2564-2566" },
+        { level: "มัธยมศึกษาตอนปลาย", school: "โรงเรียนนารีนุกูล", year: "2567-2569" }
+      ]
+    },
+    certificates: [
+      {
+        id: 1,
+        title: "การแข่งขันตอบปัญหาวิชาวิทยาศาสตร์–คณิตศาสตร์",
+        year: "ประจำปีการศึกษา 2569 (ระดับมัธยมศึกษาตอนปลาย)",
+        award: "รางวัลชนะเลิศอันดับ 1 (ระดับโรงเรียน)",
+        desc: "ได้เข้าร่วมการแข่งขันตอบปัญหาวิชาวิทยาศาสตร์–คณิตศาสตร์ ซึ่งจัดขึ้นเพื่อส่งเสริมทักษะการคิดวิเคราะห์ การแก้ปัญหาเชิงตรรกะ และการประยุกต์ใช้ความรู้ในสถานการณ์จริง โดยสามารถทำคะแนนรวมสูงสุด สะท้อนให้เห็นถึงความสามารถด้านเหตุผลเชิงคณิตศาสตร์ ความแม่นยำทางวิชาการ และการทำงานภายใต้แรงกดดันได้อย่างมีประสิทธิภาพ"
+      },
+      {
+        id: 2,
+        title: "การแข่งขันเรียงความภาษาไทยเชิงสร้างสรรค์",
+        year: "หัวข้อ “เยาวชนกับการพัฒนาประเทศ” ปีการศึกษา 2569",
+        award: "รางวัลรองชนะเลิศอันดับ 1 (ระดับเขตพื้นที่)",
+        desc: "ได้แสดงศักยภาพด้านการใช้ภาษาไทยอย่างถูกต้อง สละสลวย และมีความคิดสร้างสรรค์ สามารถถ่ายทอดแนวคิดได้อย่างเป็นระบบ ชัดเจน และมีเหตุผล ได้รับคำชื่นชมจากคณะกรรมการในด้านเนื้อหาที่ลึกซึ้งและมุมมองที่สร้างสรรค์"
+      }
+    ],
+    activities: [
+      { id: 1, title: "การแข่งขัน A-Math", desc: "รางวัลชนะเลิศระดับภาคตะวันออกเฉียงเหนือ", img: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?q=80" },
+      { id: 2, title: "จิตอาสาพัฒนาโรงเรียน", desc: "กิจกรรมบำเพ็ญประโยชน์ร่วมกับสภานักเรียน", img: "https://images.unsplash.com/photo-1559027615-cd26735550b0?q=80" }
+    ]
+  });
+
+  const pages = [
+    { id: 'p1', title: 'หน้าปก (Cover)', icon: <ImageIcon size={20}/> },
+    { id: 'p2', title: 'คำนำ (Preface)', icon: <BookOpen size={20}/> },
+    { id: 'p3', title: 'สารบัญ (Contents)', icon: <List size={20}/> },
+    { id: 'p4', title: 'ประวัติส่วนตัว (Profile)', icon: <User size={20}/> },
+    { id: 'p5', title: 'ประวัติการศึกษา (Education)', icon: <GraduationCap size={20}/> },
+    { id: 'p6', title: 'กิจกรรม 1 (Activities)', icon: <Calendar size={20}/> },
+    { id: 'p7', title: 'กิจกรรม 2 (Activities)', icon: <Zap size={20}/> },
+    { id: 'p8', title: 'เกียรติบัตร (Certificates)', icon: <Award size={20}/> },
+    { id: 'p9', title: 'เกียรติบัตร 2 (Certificates)', icon: <Star size={20}/> },
+    { id: 'p10', title: 'ความภูมิใจ (Pride)', icon: <Heart size={20}/> },
+  ];
+
+  useEffect(() => {
+    const initAuth = async () => {
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        await signInWithCustomToken(auth, __initial_auth_token);
+      } else {
+        await signInAnonymously(auth);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'portfolio', 'main');
+    const unsub = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) setPortfolioData(prev => ({ ...prev, ...docSnap.data() }));
+    });
+    return () => unsub();
+  }, [user]);
+
+  const handleSave = async () => {
+    if (!user) return;
+    try {
+      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'portfolio', 'main'), portfolioData);
+      setIsEditing(false);
+    } catch (err) { console.error(err); }
+  };
+
+  const updateField = (section, field, value) => {
+    setPortfolioData(prev => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file && activeImageEdit) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (activeImageEdit.type === 'list') {
+            const newList = [...portfolioData[activeImageEdit.section]];
+            newList[activeImageEdit.index][activeImageEdit.field] = reader.result;
+            setPortfolioData(prev => ({ ...prev, [activeImageEdit.section]: newList }));
+        } else {
+            updateField(activeImageEdit.section, activeImageEdit.field, reader.result);
+        }
+        setActiveImageEdit(null);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const triggerImageEdit = (section, field, type='single', index=null) => {
+    setActiveImageEdit({ section, field, type, index });
+    fileInputRef.current.click();
+  };
+
+  const renderEditableText = (section, field, className, isTextArea = false) => {
+    const content = portfolioData[section]?.[field] || "";
+    if (!isEditing) return <div className={className}>{content}</div>;
+    return isTextArea ? (
+      <textarea className={`${className} w-full bg-white/30 p-2 rounded-lg border-2 border-white/20`} value={content} onChange={(e) => updateField(section, field, e.target.value)} rows={6} />
+    ) : (
+      <input className={`${className} w-full bg-white/30 p-2 rounded-lg border-2 border-white/20`} value={content} onChange={(e) => updateField(section, field, e.target.value)} />
+    );
+  };
+
+  const renderPage = () => {
+    const pId = pages[currentPage].id;
+    
+    // --- หน้าปก (แก้ไขเป็น No Image Design) ---
+    if (pId === 'p1') return (
+        <div className="flex flex-col items-center justify-center h-full text-center space-y-12 animate-in fade-in zoom-in">
+            {/* กราฟิกตกแต่งด้านบนแทนรูปภาพ */}
+            <div className="relative">
+                <div className="absolute -inset-10 bg-white/10 blur-3xl rounded-full"></div>
+                <div className="w-48 h-48 bg-gradient-to-tr from-yellow-400 to-orange-400 rounded-full flex items-center justify-center shadow-2xl relative z-10 animate-pulse border-8 border-white/20">
+                    <Sparkles size={80} className="text-white" />
+                </div>
+            </div>
+
+            <div className="space-y-8 z-10">
+                <div className="space-y-2">
+                    <p className="text-white text-2xl font-bold tracking-[0.5em] opacity-80 uppercase">The Scholarly Journey of</p>
+                    <h1 className="text-9xl font-black text-white italic tracking-tighter drop-shadow-[0_10px_10px_rgba(0,0,0,0.3)]">
+                        PORT<br/>FOLIO
+                    </h1>
+                </div>
+
+                <div className="bg-white/95 p-10 rounded-[3rem] shadow-2xl text-slate-800 border-b-[12px] border-indigo-600 max-w-xl mx-auto backdrop-blur-md">
+                    <div className="w-12 h-1 bg-indigo-600 mx-auto mb-6 rounded-full opacity-30"></div>
+                    {renderEditableText('profile', 'nameTh', 'text-5xl font-black font-kanit mb-3')}
+                    <div className="h-[1px] w-20 bg-slate-200 mx-auto mb-3"></div>
+                    {renderEditableText('profile', 'school', 'text-2xl font-bold text-slate-500')}
+                    <p className="mt-6 text-sm font-black text-indigo-500 tracking-widest uppercase opacity-60">Admission Year 2026</p>
+                </div>
+            </div>
+        </div>
+    );
+
+    // --- คำนำ ---
+    if (pId === 'p2') return (
+        <div className="h-full flex flex-col space-y-8 animate-in fade-in">
+            <h2 className="text-5xl font-black text-white font-kanit flex items-center gap-4"><BookOpen size={48}/> PREFACE</h2>
+            <div className="bg-white/95 rounded-[3.5rem] p-12 shadow-2xl flex-1 flex flex-col justify-center">
+                <div className="max-w-2xl mx-auto space-y-8 text-center italic">
+                    <Sparkles className="mx-auto text-indigo-500" size={48} />
+                    {renderEditableText('preface', 'content', 'text-2xl leading-relaxed text-slate-700 font-medium', true)}
+                    <div className="pt-10 border-t border-slate-100">
+                        <p className="text-xl font-bold text-slate-800">{portfolioData.profile.nameTh}</p>
+                        <p className="text-slate-400">ผู้จัดทำ</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    // --- สารบัญ ---
+    if (pId === 'p3') return (
+        <div className="h-full flex flex-col space-y-8 animate-in fade-in">
+            <h2 className="text-5xl font-black text-white font-kanit flex items-center gap-4"><List size={48}/> CONTENTS</h2>
+            <div className="bg-white/95 rounded-[3.5rem] p-12 shadow-2xl flex-1">
+                <div className="grid grid-cols-1 gap-4 mt-8">
+                    {pages.map((p, idx) => (
+                        <div key={p.id} className="flex items-center justify-between border-b-2 border-slate-50 pb-4 hover:translate-x-2 transition-transform cursor-pointer" onClick={() => setCurrentPage(idx)}>
+                            <div className="flex items-center gap-6">
+                                <span className="text-3xl font-black text-indigo-500/20">{String(idx + 1).padStart(2, '0')}</span>
+                                <span className="text-xl font-bold text-slate-700">{p.title}</span>
+                            </div>
+                            <div className="flex-1 border-b-2 border-dotted border-slate-200 mx-4 mb-2"></div>
+                            <span className="text-xl font-black text-indigo-600">PAGE {idx + 1}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+
+    // --- ประวัติส่วนตัว ---
+    if (pId === 'p4') return (
+        <div className="h-full flex flex-col space-y-8 animate-in slide-in-from-top-10">
+            <h2 className="text-5xl font-black text-white font-kanit flex items-center gap-4"><User size={48}/> PROFILE</h2>
+            <div className="grid grid-cols-3 gap-8 flex-1">
+                <div className="col-span-1 space-y-6">
+                    <div className="bg-white rounded-[2rem] p-3 shadow-xl overflow-hidden aspect-[3/4]">
+                        <img src={portfolioData.profile.coverUrl} className="w-full h-full object-cover rounded-2xl" alt="Profile" />
+                    </div>
+                    <div className="bg-white/20 backdrop-blur-md p-6 rounded-3xl border border-white/30 text-white">
+                        <h3 className="font-bold border-b border-white/20 mb-4 pb-2">CONTACT</h3>
+                        <div className="space-y-2 text-sm">
+                            <p className="flex items-center gap-2"><Phone size={14}/> {renderEditableText('profile', 'phone')}</p>
+                            <p className="flex items-center gap-2"><Mail size={14}/> {renderEditableText('profile', 'email')}</p>
+                            <p className="flex items-center gap-2"><MapPin size={14}/> {renderEditableText('profile', 'address')}</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="col-span-2 bg-white/95 rounded-[3rem] p-12 shadow-2xl space-y-8 overflow-y-auto no-scrollbar">
+                    <h3 className="text-indigo-600 font-bold tracking-widest uppercase">Personal Data</h3>
+                    {renderEditableText('profile', 'nameTh', 'text-5xl font-black text-slate-800')}
+                    <div className="grid grid-cols-2 gap-8 pt-6 border-t border-slate-100">
+                        <div><p className="text-slate-400 font-bold">Birthday</p> {renderEditableText('profile', 'birthday', 'text-xl font-bold')}</div>
+                        <div><p className="text-slate-400 font-bold">Nickname</p> {renderEditableText('profile', 'nickname', 'text-xl font-bold')}</div>
+                        <div className="col-span-2"><p className="text-slate-400 font-bold">Motto</p> {renderEditableText('profile', 'motto', 'text-xl font-bold italic text-indigo-500')}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    // --- ประวัติการศึกษา ---
+    if (pId === 'p5') return (
+      <div className="h-full flex flex-col space-y-8 animate-in fade-in">
+          <h2 className="text-5xl font-black text-white font-kanit flex items-center gap-4"><GraduationCap size={48}/> EDUCATION</h2>
+          <div className="bg-white/95 rounded-[3.5rem] p-10 shadow-2xl flex-1 flex flex-col gap-8 overflow-y-auto no-scrollbar">
+              <div className="space-y-4">
+                  <div className="flex items-center gap-3 text-indigo-600 font-bold tracking-widest text-lg uppercase">
+                      <Sparkles size={24} /> Academic Summary
+                  </div>
+                  <div className="bg-indigo-50/50 p-6 rounded-3xl border-l-8 border-indigo-500">
+                      {renderEditableText('education', 'summary', 'text-lg font-bold text-slate-800 mb-4', true)}
+                      {renderEditableText('education', 'details', 'text-base text-slate-600 leading-relaxed whitespace-pre-wrap', true)}
+                      <div className="mt-4 pt-4 border-t border-indigo-100">
+                        {renderEditableText('education', 'closing', 'text-sm text-slate-500 italic', true)}
+                      </div>
+                  </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                  {portfolioData.education.history.map((edu, idx) => (
+                      <div key={idx} className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 hover:scale-105 transition-transform">
+                          <p className="text-indigo-600 font-black text-sm uppercase mb-2">{edu.level}</p>
+                          <p className="font-bold text-slate-800">{edu.school}</p>
+                          <p className="text-xs text-slate-400 font-bold mt-1">{edu.year}</p>
+                      </div>
+                  ))}
+              </div>
+          </div>
+      </div>
+    );
+
+    // --- เกียรติบัตร ---
+    if (pId === 'p8') return (
+      <div className="h-full flex flex-col space-y-8 animate-in fade-in">
+          <h2 className="text-5xl font-black text-white font-kanit flex items-center gap-4"><Award size={48}/> CERTIFICATES</h2>
+          <div className="bg-white/95 rounded-[3.5rem] p-8 md:p-12 shadow-2xl flex-1 space-y-8 overflow-y-auto no-scrollbar">
+              {portfolioData.certificates.map((cert, index) => (
+                  <div key={cert.id} className="relative bg-gradient-to-r from-slate-50 to-white border-2 border-slate-100 p-8 rounded-[2.5rem] shadow-sm hover:shadow-md transition-all group overflow-hidden">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full -mr-16 -mt-16 group-hover:scale-110 transition-transform"></div>
+                      <div className="flex flex-col md:flex-row gap-8 items-start relative z-10">
+                          <div className="bg-indigo-600 p-6 rounded-3xl text-white shadow-xl shadow-indigo-200">
+                              <Medal size={48} />
+                          </div>
+                          <div className="flex-1 space-y-3">
+                              <div className="flex flex-wrap items-center gap-3">
+                                  <span className="bg-yellow-400 text-yellow-900 text-xs font-black px-3 py-1 rounded-full uppercase tracking-widest">{cert.award}</span>
+                                  <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">{cert.year}</span>
+                              </div>
+                              <h3 className="text-2xl font-black text-slate-800 leading-tight">{cert.title}</h3>
+                              <p className="text-slate-600 leading-relaxed text-sm italic">{cert.desc}</p>
+                          </div>
+                      </div>
+                  </div>
+              ))}
+          </div>
+      </div>
+    );
+
+    // --- กิจกรรม ---
+    if (pId === 'p6' || pId === 'p7') return (
+        <div className="h-full flex flex-col space-y-8 animate-in fade-in">
+             <h2 className="text-5xl font-black text-white font-kanit flex items-center gap-4"><Calendar size={48}/> ACTIVITIES</h2>
+             <div className="bg-white/95 rounded-[3.5rem] p-10 shadow-2xl flex-1 grid grid-cols-1 md:grid-cols-2 gap-8 overflow-y-auto no-scrollbar">
+                {portfolioData.activities.map((act, index) => (
+                    <div key={act.id} className="bg-slate-50 rounded-[2.5rem] overflow-hidden flex flex-col border border-slate-100 hover:shadow-lg transition-all">
+                        <div className="h-48 relative group">
+                            <img src={act.img} className="w-full h-full object-cover" alt={act.title} />
+                        </div>
+                        <div className="p-6 space-y-2">
+                            <div className="bg-indigo-100 text-indigo-600 w-fit px-3 py-1 rounded-full text-xs font-black uppercase">Project {index + 1}</div>
+                            <h4 className="font-bold text-xl text-slate-800">{act.title}</h4>
+                            <p className="text-sm text-slate-500 leading-relaxed">{act.desc}</p>
+                        </div>
+                    </div>
+                ))}
+             </div>
+        </div>
+    );
+
+    return (
+        <div className="h-full flex flex-col space-y-8 animate-in fade-in">
+             <h2 className="text-5xl font-black text-white font-kanit flex items-center gap-4">{pages[currentPage].icon} {pages[currentPage].title}</h2>
+             <div className="bg-white/95 rounded-[3.5rem] p-12 shadow-2xl flex-1 overflow-y-auto no-scrollbar flex flex-col items-center justify-center text-center">
+                <div className="bg-slate-100 p-12 rounded-full text-slate-200 mb-6">
+                    <FileText size={80} />
+                </div>
+                <p className="text-2xl text-slate-400 font-bold">ข้อมูลส่วนนี้จะถูกเพิ่มเติมในลำดับถัดไป</p>
+             </div>
+        </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f1f5f9] flex overflow-hidden">
+      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+
+      {/* Navigation Sidebar */}
+      <div className="w-20 md:w-28 bg-white border-r border-slate-100 flex flex-col items-center py-8 space-y-6 z-50">
+        <div className="w-12 h-12 md:w-16 md:h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg">TCAS</div>
+        <div className="flex-1 space-y-4 overflow-y-auto no-scrollbar px-2">
+          {pages.map((p, i) => (
+            <button key={p.id} onClick={() => setCurrentPage(i)} className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl flex items-center justify-center transition-all ${currentPage === i ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-300 hover:bg-slate-50'}`}>
+              {p.icon}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => isAdmin ? setIsEditing(!isEditing) : setShowAuth(true)} className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl flex items-center justify-center ${isAdmin ? 'bg-yellow-400 text-slate-900 shadow-lg' : 'bg-slate-100 text-slate-400'}`}>
+          {isAdmin ? (isEditing ? <Save onClick={handleSave} /> : <Edit3 />) : <Lock />}
+        </button>
+      </div>
+
+      {/* Main Canvas Area */}
+      <div className="flex-1 flex flex-col relative overflow-hidden">
+        <header className="p-6 md:p-10 flex justify-between items-center z-20">
+            <div className="bg-white/80 backdrop-blur-md px-6 py-3 rounded-full shadow-lg border border-white flex items-center gap-4">
+                <span className="font-black text-indigo-600">PAGE {currentPage + 1}/10</span>
+                <div className="h-4 w-[1px] bg-slate-200"></div>
+                <h2 className="font-bold text-slate-800">{pages[currentPage].title}</h2>
+            </div>
+            <div className="flex gap-4">
+                <button onClick={() => setCurrentPage(p => Math.max(0, p - 1))} className="bg-white p-4 rounded-full shadow-lg text-slate-400 hover:text-indigo-600 transition-colors"><ChevronLeft/></button>
+                <button onClick={() => setCurrentPage(p => Math.min(pages.length - 1, p + 1))} className="bg-white p-4 rounded-full shadow-lg text-slate-400 hover:text-indigo-600 transition-colors"><ChevronRight/></button>
+            </div>
+        </header>
+
+        <main className="flex-1 px-6 pb-10 md:px-12 md:pb-12 flex justify-center items-start overflow-hidden">
+            <div className="w-full max-w-5xl h-full aspect-[1/1.414] bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-[3rem] md:rounded-[4rem] p-8 md:p-16 border-[12px] md:border-[20px] border-white shadow-2xl relative overflow-hidden transition-all duration-700">
+                <div className="h-full relative z-10 overflow-y-auto no-scrollbar">
+                    {renderPage()}
+                </div>
+            </div>
+        </main>
+
+        {isEditing && (
+            <div className="fixed bottom-10 right-10 z-50 animate-bounce">
+                <button onClick={handleSave} className="bg-emerald-500 text-white px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold text-lg border-4 border-white">
+                    <Save /> บันทึกข้อมูลทั้งหมด
+                </button>
+            </div>
+        )}
+      </div>
+
+      {/* Password Modal */}
+      {showAuth && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+            <div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center relative">
+                <button onClick={() => setShowAuth(false)} className="absolute top-4 right-4 text-slate-400"><X/></button>
+                <div className="bg-indigo-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Lock className="text-indigo-600" size={32}/></div>
+                <h3 className="text-xl font-bold mb-6 font-kanit text-slate-800">ยืนยันตัวตนเพื่อแก้ไข</h3>
+                <form onSubmit={(e) => {
+                    e.preventDefault();
+                    if (e.target.pass.value === '1234') { setIsAdmin(true); setShowAuth(false); setIsEditing(true); }
+                    else { alert("รหัสผ่านไม่ถูกต้อง"); e.target.pass.value = ''; }
+                }}>
+                    <input name="pass" type="password" placeholder="รหัสผ่าน (1234)" className="w-full text-center text-xl p-3 border-2 rounded-xl mb-4 outline-none focus:border-indigo-500" autoFocus />
+                    <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700">ตกลง</button>
+                </form>
+            </div>
+        </div>
+      )}
+
+      <style>
+        {`
+          @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700;800&family=Kanit:wght@400;700;900&display=swap');
+          body { font-family: 'Sarabun', sans-serif; }
+          .font-kanit { font-family: 'Kanit', sans-serif; }
+          .no-scrollbar::-webkit-scrollbar { display: none; }
+          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        `}
+      </style>
+    </div>
+  );
+}
